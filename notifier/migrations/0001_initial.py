@@ -3,6 +3,12 @@ import datetime
 from south.db import db
 from south.v2 import SchemaMigration
 from django.db import models
+from django.conf import settings
+from django.contrib.auth import get_user_model
+
+# A setting that can be used in foreign key declarations
+AUTH_USER_MODEL = getattr(settings, 'AUTH_USER_MODEL', 'auth.User')
+AUTH_USER_APP_LABEL, AUTH_USER_MODEL_NAME = AUTH_USER_MODEL.rsplit('.', 1)
 
 
 class Migration(SchemaMigration):
@@ -70,7 +76,7 @@ class Migration(SchemaMigration):
             (u'id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
             ('created', self.gf('django.db.models.fields.DateTimeField')(default=datetime.datetime(2013, 6, 24, 0, 0), db_index=True)),
             ('updated', self.gf('django.db.models.fields.DateTimeField')(default=datetime.datetime(2013, 6, 24, 0, 0), db_index=True)),
-            ('user', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['auth.User'])),
+            ('user', self.gf('django.db.models.fields.related.ForeignKey')(to=orm[AUTH_USER_MODEL])),
             ('notification', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['notifier.Notification'])),
             ('backend', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['notifier.Backend'])),
             ('notify', self.gf('django.db.models.fields.BooleanField')(default=True)),
@@ -85,7 +91,7 @@ class Migration(SchemaMigration):
             (u'id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
             ('created', self.gf('django.db.models.fields.DateTimeField')(default=datetime.datetime(2013, 6, 24, 0, 0), db_index=True)),
             ('updated', self.gf('django.db.models.fields.DateTimeField')(default=datetime.datetime(2013, 6, 24, 0, 0), db_index=True)),
-            ('user', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['auth.User'])),
+            ('user', self.gf('django.db.models.fields.related.ForeignKey')(to=orm[AUTH_USER_MODEL])),
             ('notification', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['notifier.Notification'])),
             ('backend', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['notifier.Backend'])),
             ('success', self.gf('django.db.models.fields.BooleanField')(default=False)),
@@ -136,7 +142,7 @@ class Migration(SchemaMigration):
             u'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '50'})
         },
-        u'auth.user': {
+        AUTH_USER_MODEL: {
             'Meta': {'object_name': 'User'},
             'date_joined': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime.now'}),
             'email': ('django.db.models.fields.EmailField', [], {'max_length': '75', 'blank': 'True'}),
@@ -199,7 +205,7 @@ class Migration(SchemaMigration):
             'notification': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['notifier.Notification']"}),
             'success': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'updated': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime(2013, 6, 24, 0, 0)', 'db_index': 'True'}),
-            'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['auth.User']"})
+            'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm[AUTH_USER_MODEL]"})
         },
         u'notifier.userprefs': {
             'Meta': {'unique_together': "(('user', 'notification', 'backend'),)", 'object_name': 'UserPrefs'},
@@ -209,7 +215,7 @@ class Migration(SchemaMigration):
             'notification': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['notifier.Notification']"}),
             'notify': ('django.db.models.fields.BooleanField', [], {'default': 'True'}),
             'updated': ('django.db.models.fields.DateTimeField', [], {'default': 'datetime.datetime(2013, 6, 24, 0, 0)', 'db_index': 'True'}),
-            'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm['auth.User']"})
+            'user': ('django.db.models.fields.related.ForeignKey', [], {'to': u"orm[AUTH_USER_MODEL]"})
         }
     }
 

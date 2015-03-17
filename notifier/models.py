@@ -6,7 +6,8 @@ from collections import Iterable
 from importlib import import_module
 
 # Django
-from django.contrib.auth.models import User, Group, Permission
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group, Permission
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
 from django.db import models
@@ -17,6 +18,8 @@ from django.utils.timezone import now
 
 # User
 from notifier import managers
+
+User = get_user_model()
 
 
 ###############################################################################
