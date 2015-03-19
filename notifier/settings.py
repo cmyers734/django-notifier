@@ -18,4 +18,15 @@ BACKENDS = getattr(
     ('notifier.backends.EmailBackend',)
 )
 
-BACKEND_CLASSES = [getattr(import_module(mod), cls) for (mod, cls) in (backend.rsplit(".", 1) for backend in BACKENDS)]
+BACKEND_CLASSES = [getattr(import_module(mod), cls)
+                   for (mod, cls) in (backend.rsplit(".", 1)
+                   for backend in BACKENDS)]
+
+# Whether or not to record SentNotification objects
+# Not doing so can improve performance, but also lets you store your
+# own
+CREATE_SENT_NOTIFICATIONS = getattr(
+    settings,
+    'NOTIFIER_CREATE_SENT_NOTIFICATIONS',
+    True
+)

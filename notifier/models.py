@@ -17,7 +17,9 @@ from django.dispatch import receiver
 from django.utils.timezone import now
 
 # User
+from notifier import settings
 from notifier import managers
+from notifier import signals
 
 User = get_user_model()
 
@@ -51,7 +53,8 @@ class Backend(BaseModel):
     enabled = models.BooleanField(default=True)
 
     # The klass value defines the class to be used to send the notification.
-    klass = models.CharField(max_length=500,
+    klass = models.CharField(
+        max_length=500,
         help_text='Example: notifier.backends.EmailBackend')
 
     def __unicode__(self):
@@ -75,8 +78,10 @@ class Backend(BaseModel):
         backendobject = self.backendclass(notification)
         sent_success = backendobject.send(user, context)
 
-        SentNotification.objects.create(user=user, notification=notification,
-            backend=self, success=sent_success)
+        if settings.CREATE_SENT_NOTIFICATIONS:
+            SentNotification.objects.create(
+                user=user, notification=notification,
+                backend=self, success=sent_success)
 
         return sent_success
 
@@ -111,7 +116,8 @@ class Notification(BaseModel):
         # Need an iterable with permission strings to check using has_perms.
         # This makes it possible to take advantage of the cache.
         perm_list = set(
-            ["%s.%s" % (p.content_type.app_label, p.codename) for p in self.permissions.select_related()]
+            ["%s.%s" % (p.content_type.app_label, p.codename)
+             for p in self.permissions.select_related()]
         )
 
         if not user.has_perms(perm_list):
@@ -224,9 +230,15 @@ class Notification(BaseModel):
         if not isinstance(users, Iterable):
             users = [users]
 
-        for user in users:
-            for backend in self.get_backends(user):
-                backend.send(user, self, context)
+        try:
+            for user in users:
+                for backend in self.get_backends(user):
+                    backend.send(user, self, context)
+        finally:
+            signals.notification_posted.send(sender=self.__class__,
+                                             notification=self,
+                                             users=users,
+                                             context=context)
 
 
 class GroupPrefs(BaseModel):
@@ -291,7 +303,7 @@ class SentNotification(BaseModel):
 ## Signal Recievers
 ###############################################################################
 @receiver(pre_delete, sender=Backend,
-    dispatch_uid='notifier.models.backend_pre_delete')
+          dispatch_uid='notifier.models.backend_pre_delete')
 def backend_pre_delete(sender, instance, **kwargs):
     raise PermissionDenied(
         'Cannot delete backend %s. Remove from settings.' % instance.name)
