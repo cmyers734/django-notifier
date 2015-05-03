@@ -5,11 +5,14 @@
 from collections import Iterable
 
 # Django
-from django.contrib.auth.models import Group, Permission, User
+from django.contrib.auth.models import Group, Permission
+from django.contrib.auth import get_user_model
 from django.db.models.query import QuerySet
 
 # User
 from notifier.models import Notification, Backend, UserPrefs
+
+User = get_user_model()
 
 
 ###############################################################################
