@@ -12,8 +12,6 @@ from django.db.models.query import QuerySet
 # User
 from notifier.models import Notification, Backend, UserPrefs
 
-User = get_user_model()
-
 
 ###############################################################################
 ## Code
@@ -97,6 +95,7 @@ def update_preferences(name, user, prefs_dict):
         e.g. {'email': 'created', 'sms': updated}
     """
     notification = Notification.objects.get(name=name)
+    User = get_user_model()
 
     if isinstance(user, User):
         return notification.update_user_prefs(user, prefs_dict)
