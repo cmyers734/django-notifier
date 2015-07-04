@@ -28,13 +28,22 @@ class NotifierForm(forms.Form):
         self.prefs_dict = notification.get_user_prefs(user)
         self.backends_included = set()
         self.title = notification.display_name
+        self.description = notification.description
 
         for backend, value in self.prefs_dict.items():
             self.backends_included.add(backend)
             self.fields[backend.name] = forms.BooleanField(
-                required=False
+                required=False,
             )
             self.fields[backend.name].initial = value
+            is_notify_mandatory = backend.get_notify_mandatory(
+                notification)
+            self.fields[backend.name].is_notify_mandatory = \
+                is_notify_mandatory
+
+            if is_notify_mandatory:
+                self.fields[backend.name].widget.attrs['disabled'] = True
+                self.fields[backend.name].widget.attrs['readonly'] = True
 
     def save(self, *args, **kwargs):
         for backend, value in self.prefs_dict.items():

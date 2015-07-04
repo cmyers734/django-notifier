@@ -11,13 +11,15 @@ from django.db.models.query import QuerySet
 
 # User
 from notifier.models import Notification, Backend, UserPrefs
+from notifier.models import BackendConfiguration
 
 
 ###############################################################################
 ## Code
 ###############################################################################
 def create_notification(name, display_name=None,
-        permissions=None, backends=None, public=True):
+        permissions=None, backends=None, public=True,
+        description=None):
     """
     Arguments
 
@@ -26,6 +28,7 @@ def create_notification(name, display_name=None,
         :permissions: list of permission names or objects
         :backends: list of backend names or objects
         :public: (boolean)
+        :description: optional description (presentable to the user)
 
     Returns
         Notification object
@@ -47,19 +50,48 @@ def create_notification(name, display_name=None,
     try:
         n = Notification.objects.get(name=name)
     except Notification.DoesNotExist:
-        n = Notification.objects.create(name=name, display_name=display_name,
+        n = Notification.objects.create(name=name,
+            display_name=display_name,
+            description=description,
             public=public)
         n.permissions.add(*permissions)
         n.backends.add(*backends)
     else:
         n.name = name
         n.display_name = display_name
+        n.description = description
         n.public = public
         n.permissions = permissions
         n.backends = backends
         n.save()
 
     return n
+
+
+def create_backend_configuration(backend, notification,
+                                 notify_default=False,
+                                 notify_mandatory=False):
+    """
+    Arguments
+
+        :backend: a backend name or object
+        :notification: a notification name or object
+        :notify_default: (boolean)
+        :notify_mandatory: (boolean)
+
+    Returns
+        BackendConfiguration object
+    """
+    backend = _get_backend_queryset(backend)[0]
+    notification = _get_notification_queryset(notification)[0]
+
+    bcfg, created = BackendConfiguration.objects.get_or_create(
+        backend=backend, notification=notification)
+    bcfg.notify_default = notify_default
+    bcfg.notify_mandatory = notify_mandatory
+    bcfg.save()
+
+    return bcfg
 
 
 def send_notification(name, users, context=None):
@@ -150,3 +182,22 @@ def _get_backend_queryset(backends):
             backends = Backend.objects.filter(name__in=backends)
 
     return backends
+
+
+def _get_notification_queryset(notifications):
+    if (notifications and
+            not isinstance(notifications, QuerySet)):
+        if isinstance(notifications, Notification):
+            notifications = [notifications]
+        else:
+            if isinstance(notifications, basestring):
+                notifications = [notifications]
+            elif isinstance(notifications, Iterable):
+                if not all(isinstance(x, basestring) for x in notifications):
+                    raise TypeError
+            else:
+                raise TypeError
+            notifications = Notifications.objects.filter(
+                name__in=notifications)
+
+    return notifications

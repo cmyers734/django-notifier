@@ -68,6 +68,14 @@ class Backend(BaseModel):
         return getattr(import_module(module), klass)
     backendclass = property(_get_backendclass)
 
+    def get_notify_mandatory(self, notification):
+        try:
+            bcfg = BackendConfiguration.objects.get(
+                notification=notification, backend=self)
+            return bcfg.notify_mandatory
+        except BackendConfiguration.DoesNotExist:
+            return False
+
     def send(self, user, notification, context=None):
         """
         Send the notification to the specified user using this backend.
@@ -86,12 +94,25 @@ class Backend(BaseModel):
         return sent_success
 
 
+class BackendConfiguration(BaseModel):
+    """Configuration options per Notification, Backend"""
+    class Meta:
+        unique_together = ('backend', 'notification')
+
+    backend = models.ForeignKey('Backend')
+    notification = models.ForeignKey('Notification')
+
+    notify_mandatory = models.BooleanField(default=False)
+    notify_default = models.BooleanField(default=False)
+
+
 class Notification(BaseModel):
     """
     Entries for various notifications
     """
     name = models.CharField(max_length=200, unique=True, db_index=True)
     display_name = models.CharField(max_length=200)
+    description = models.CharField(max_length=500, null=True, blank=True)
 
     # This field determines whether the notification is to be shown
     #   to users or it is private and only set by code.
@@ -127,31 +148,62 @@ class Notification(BaseModel):
     def get_backends(self, user):
         """
         Returns backends after checking `User` and `Group` preferences
-        as well as `backend.enabled` flag.
+        as well as `backend.enabled` flag and any BackendConfiguration
         """
-        user_settings = self.userprefs_set.filter(user=user)
-        group_filter = Q()
-        for group in user.groups.all():
-            group_filter = Q(group_filter | Q(group=group))
+        backends_defaulting_to_true = set()
+        backends_included_by_userprefs = set()
+        backends_excluded_by_userprefs = set()
+        backends_included_by_groupprefs = set()
+        backends_excluded_by_groupprefs = set()
+        backends_mandatory = set()
 
-        group_settings = self.groupprefs_set.filter(group_filter)
+        # Process backend configuration for this notification to figure out
+        # which backends are used by default and which are mandatory
+        backend_configurations = BackendConfiguration.objects.filter(
+            notification=self)
+        for bcfg in backend_configurations:
+            if bcfg.notify_default:
+                backends_defaulting_to_true.add(bcfg.backend_id)
+            if bcfg.notify_mandatory:
+                backends_mandatory.add(bcfg.backend_id)
 
-        backends = self.backends.filter(enabled=True)
-
-        remove_backends = []
-        for backend in backends:
-            try:
-                userprefs = user_settings.get(backend=backend)
-            except UserPrefs.DoesNotExist:
-                try:
-                    group_settings.get(backend=backend, notify=True)
-                except GroupPrefs.DoesNotExist:
-                    remove_backends.append(backend.id)
+        # Figure out which are included/excluded by user preference
+        user_backend_prefs = self.userprefs_set.filter(
+            user=user).values('backend__id', 'notify')
+        for bpref in user_backend_prefs:
+            if bpref['notify']:
+                backends_included_by_userprefs.add(bpref['backend__id'])
             else:
-                if not userprefs.notify:
-                    remove_backends.append(backend.id)
+                backends_excluded_by_userprefs.add(bpref['backend__id'])
 
-        return backends.exclude(id__in=remove_backends)
+        # Figure out which are included/excluded by group preference
+        group_backend_prefs = self.groupprefs_set.filter(
+            group__in=user.groups.all()).values('backend__id', 'notify')
+        for bpref in group_backend_prefs:
+            if bpref['notify']:
+                backends_included_by_groupprefs.add(bpref['backend__id'])
+            else:
+                backends_excluded_by_groupprefs.add(bpref['backend__id'])
+
+        # Use sets to apply inclusions and then remove exclusions until
+        # we end up with only those backends that are enabled for the user
+        # for this notification.
+        backend_ids = set()
+        # Start with defaults that are true
+        backend_ids = backend_ids.union(backends_defaulting_to_true)
+
+        backend_ids = backend_ids.union(
+            backends_included_by_groupprefs) - backends_excluded_by_groupprefs
+
+        backend_ids = backend_ids.union(
+            backends_included_by_userprefs) - backends_excluded_by_userprefs
+
+        backend_ids = backend_ids.union(backends_mandatory)
+
+        backends = self.backends.filter(
+            enabled=True, pk__in=backend_ids)
+
+        return backends
 
     def get_user_prefs(self, user):
         """

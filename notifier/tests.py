@@ -4,7 +4,7 @@
 # Django
 from django.contrib.auth.models import User, Group
 from django.contrib.contenttypes.models import ContentType
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.contrib.auth.models import Permission
 from django.core import mail
 
@@ -64,10 +64,6 @@ class PreferencesTests(TestCase):
         """Test if group preference applies to user"""
         method_dict = self.test1_notification.get_user_prefs(user=self.user1)
 
-        # print models.Backend.objects.values_list(
-        #     'display_name', 'name', 'id')
-        # print method_dict
-
         self.assertEqual(method_dict[self.email_backend], True,
             msg='Group notification preference failed.')
 
@@ -88,6 +84,93 @@ class PreferencesTests(TestCase):
 
         self.assertEqual(method_dict[self.email_backend], False,
             msg='User notification preference failed.')
+
+    def testBackendConfiguration(self):
+        """
+        Test that backend configuration can force a notification to
+        be enabled even though user and groups say no.
+        """
+        user2 = User.objects.create(
+            username='user2',
+            email='user2@example.com'
+        )
+
+        group2 = Group.objects.create(
+            name='group2'
+        )
+
+        group2_prefs = models.GroupPrefs.objects.create(
+            group=group2,
+            notification=self.test1_notification,
+            backend=self.email_backend,
+            notify=False
+        )
+
+        bcfg = models.BackendConfiguration.objects.create(
+            notification=self.test1_notification,
+            backend=self.email_backend,
+            notify_default=False,
+            notify_mandatory=False)
+
+        cases = [
+            # Nothing specified and not default and not mandatory
+            {'in': [False, None,  None,  False], 'out': False},
+            # Default wins
+            {'in': [True,  None,  None,  False], 'out': True},
+            # Mandatory overrides default
+            {'in': [False, None,  None,  True],  'out': True},
+            # Group wins
+            {'in': [False, True,  None,  False], 'out': True},
+            # Group wins over default
+            {'in': [False, False, None,  False], 'out': False},
+            {'in': [True,  False, None,  False], 'out': False},
+            # User wins over group
+            {'in': [False, False, False, False], 'out': False},
+            {'in': [False, True,  False, False], 'out': False},
+            {'in': [False, False, True,  False], 'out': True},
+            {'in': [False, True,  True,  False], 'out': True},
+            {'in': [True,  False, False, False], 'out': False},
+            {'in': [True,  True,  False, False], 'out': False},
+            {'in': [True,  False, True,  False], 'out': True},
+            {'in': [True,  True,  True,  False], 'out': True},
+            # Mandatory wins
+            {'in': [False, False, False, True], 'out': True},
+            {'in': [False, False, True,  True], 'out': True},
+            {'in': [False, True,  False, True], 'out': True},
+            {'in': [False, True,  True,  True], 'out': True},
+            {'in': [True,  False, False, True], 'out': True},
+            {'in': [True,  False, True,  True], 'out': True},
+            {'in': [True,  True,  False, True], 'out': True},
+            {'in': [True,  True,  True,  True], 'out': True},
+        ]
+
+        for i, case in enumerate(cases):
+            # Start with user not a member of groups
+            user2.groups.clear()
+            if case['in'][1] is not None:
+                group2_prefs.notify = case['in'][1]
+                group2_prefs.save()
+                user2.groups.add(group2)
+
+            # Start with no user prefs
+            models.UserPrefs.objects.all().delete()
+            if case['in'][2] is not None:
+                models.UserPrefs.objects.create(
+                    user=user2,
+                    notification=self.test1_notification,
+                    backend=self.email_backend,
+                    notify=case['in'][2]
+                )
+
+            bcfg.notify_default = case['in'][0]
+            bcfg.notify_mandatory = case['in'][3]
+            bcfg.save()
+            expected = case['out']
+
+            msg = 'Case #{} failed (expected {}) - {}'.format(i, expected, str(case))
+            method_dict = self.test1_notification.get_user_prefs(user=user2)
+            self.assertEqual(
+                method_dict[self.email_backend], expected, msg=msg)
 
 
 class PermissionTests(TestCase):
